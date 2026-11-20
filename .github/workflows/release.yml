@@ -2,6 +2,8 @@ name: Release
 on:
   push:
     tags: ["v*"]
+    branches: [claude/elegant-ptolemy-jbzypv]
+  workflow_dispatch:
 permissions:
   contents: write
 jobs:
@@ -15,8 +17,11 @@ jobs:
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
       - run: ./gradlew assembleRelease
-      - run: cp app/build/outputs/apk/release/app-release.apk Calendario-${{ github.ref_name }}.apk
+      - run: cp app/build/outputs/apk/release/app-release.apk Calendario-v1.0.${{ github.run_number }}.apk
       - uses: softprops/action-gh-release@v2
         with:
-          files: Calendario-${{ github.ref_name }}.apk
+          files: Calendario-v1.0.${{ github.run_number }}.apk
+          tag_name: v1.0.${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          name: Calendario v1.0.${{ github.run_number }}
           generate_release_notes: true
