@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ikeralvaro.calendario.data.CalendarMath
 import com.ikeralvaro.calendario.data.Event
-import com.ikeralvaro.calendario.ui.theme.Accent
+
 import kotlinx.coroutines.delay
 import java.time.LocalDate
 import java.time.LocalTime
@@ -65,11 +65,11 @@ fun TimelineView(
                     Text(
                         d.dayOfWeek.getDisplayName(TextStyle.SHORT, Es).cap(),
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (isToday) Accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Box(
-                        Modifier.size(30.dp).clip(CircleShape)
-                            .background(if (isToday) Accent else Color.Transparent),
+                        Modifier.padding(top = 2.dp).size(32.dp).clip(CircleShape)
+                            .background(if (isToday) MaterialTheme.colorScheme.primary else Color.Transparent),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
@@ -93,9 +93,15 @@ fun TimelineView(
                 }
             }
         }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-
-        Row(Modifier.fillMaxSize().verticalScroll(scroll)) {
+        Row(
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = 8.dp)
+                .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .verticalScroll(scroll)
+                .padding(top = 12.dp, bottom = 100.dp)
+        ) {
             Column(Modifier.width(GutterWidth)) {
                 (0 until 24).forEach { h ->
                     Box(Modifier.height(HourHeight).fillMaxWidth()) {
@@ -109,7 +115,7 @@ fun TimelineView(
                 }
             }
             days.forEach { d ->
-                DayColumn(d, d == today, now, events.filter { !it.allDay && it.occursOn(d) }, onEdit, onCreate, Modifier.weight(1f))
+                DayColumn(d, dayCount == 1, d == today, now, events.filter { !it.allDay && it.occursOn(d) }, onEdit, onCreate, Modifier.weight(1f))
             }
         }
     }
@@ -118,6 +124,7 @@ fun TimelineView(
 @Composable
 private fun DayColumn(
     day: LocalDate,
+    wide: Boolean,
     isToday: Boolean,
     now: LocalTime,
     events: List<Event>,
@@ -137,6 +144,7 @@ private fun DayColumn(
     BoxWithConstraints(
         modifier
             .height(HourHeight * 24)
+            .background(if (isToday) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f) else Color.Transparent)
             .pointerInput(day) {
                 detectTapGestures { off ->
                     val hour = (off.y / with(density) { HourHeight.toPx() }).toInt().coerceIn(0, 23)
@@ -147,7 +155,7 @@ private fun DayColumn(
         Column {
             repeat(24) {
                 Box(Modifier.height(HourHeight).fillMaxWidth()) {
-                    HorizontalDivider(color = outline)
+                    HorizontalDivider(color = outline, thickness = 1.dp)
                 }
             }
         }
@@ -165,35 +173,42 @@ private fun DayColumn(
                     .height(height)
                     .padding(1.dp),
                 onEdit,
+                showTime = wide,
             )
         }
         if (isToday) {
             val y = HourHeight * ((now.hour * 60 + now.minute) / 60f)
-            Box(Modifier.offset(y = y - 1.dp).fillMaxWidth().height(2.dp).background(Accent))
-            Box(Modifier.offset(x = (-4).dp, y = y - 5.dp).size(10.dp).clip(CircleShape).background(Accent))
+            Box(Modifier.offset(y = y - 1.dp).fillMaxWidth().height(2.dp).background(MaterialTheme.colorScheme.primary))
+            Box(Modifier.offset(x = (-4).dp, y = y - 5.dp).size(10.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
         }
     }
 }
 
 @Composable
-fun EventChip(event: Event, modifier: Modifier, onEdit: (Event) -> Unit, compact: Boolean = false) {
+fun EventChip(event: Event, modifier: Modifier, onEdit: (Event) -> Unit, compact: Boolean = false, showTime: Boolean = true) {
     val c = Color(event.color)
-    Box(
+    Column(
         modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(c.copy(alpha = 0.16f))
+            .clip(RoundedCornerShape(8.dp))
+            .background(c)
             .clickable { onEdit(event) }
+            .padding(horizontal = if (showTime) 6.dp else 3.dp, vertical = if (compact) 2.dp else 4.dp)
     ) {
-        Box(Modifier.width(3.dp).fillMaxHeight().background(c))
-        Column(Modifier.padding(start = 6.dp, end = 2.dp, top = if (compact) 1.dp else 3.dp)) {
-            Text(
-                event.title.ifBlank { "(Sin título)" },
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onBackground,
-                maxLines = if (compact) 1 else 3,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
+        Text(
+            event.title.ifBlank { "(Sin título)" },
+            fontSize = if (showTime) 13.sp else 10.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = Color.White,
+            maxLines = if (compact) 1 else 4,
+            softWrap = !compact,
+            overflow = TextOverflow.Ellipsis,
+            lineHeight = 13.sp,
+        )
+        if (!compact && showTime && !event.allDay) Text(
+            event.startDateTime().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")),
+            fontSize = 10.sp,
+            color = Color.White.copy(alpha = 0.85f),
+            maxLines = 1,
+        )
     }
 }
