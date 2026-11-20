@@ -6,18 +6,22 @@ import java.time.YearMonth
 import java.time.temporal.TemporalAdjusters
 
 object CalendarMath {
-    /** 6x7 grid of days for a month view, weeks starting on Monday. */
-    fun monthGrid(month: YearMonth): List<LocalDate> {
-        val first = month.atDay(1).with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+    /** 6x7 grid of days for a month view. */
+    fun monthGrid(month: YearMonth, firstDay: DayOfWeek = DayOfWeek.MONDAY): List<LocalDate> {
+        val first = month.atDay(1).with(TemporalAdjusters.previousOrSame(firstDay))
         return (0 until 42).map { first.plusDays(it.toLong()) }
     }
 
-    fun weekStart(day: LocalDate): LocalDate = day.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+    fun weekStart(day: LocalDate, firstDay: DayOfWeek = DayOfWeek.MONDAY): LocalDate =
+        day.with(TemporalAdjusters.previousOrSame(firstDay))
 
-    fun weekDays(day: LocalDate): List<LocalDate> {
-        val s = weekStart(day)
+    fun weekDays(day: LocalDate, firstDay: DayOfWeek = DayOfWeek.MONDAY): List<LocalDate> {
+        val s = weekStart(day, firstDay)
         return (0 until 7).map { s.plusDays(it.toLong()) }
     }
+
+    /** Day-of-week headers starting at [firstDay]. */
+    fun weekHeader(firstDay: DayOfWeek): List<DayOfWeek> = (0 until 7).map { firstDay.plus(it.toLong()) }
 
     /**
      * Assigns columns to overlapping timed events so they can be drawn side by side.

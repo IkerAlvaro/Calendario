@@ -7,3 +7,9 @@ local.properties
 captures/
 .kotlin/
 *.apk
+
+# Firma de release (NO subir nunca)
+keystore.properties
+*.jks
+*.keystore
+*.aab

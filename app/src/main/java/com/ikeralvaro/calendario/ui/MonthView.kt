@@ -10,28 +10,32 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.EventAvailable
 import androidx.compose.material.icons.rounded.LocationOn
-import androidx.compose.material.icons.rounded.NotificationsActive
+import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ikeralvaro.calendario.data.CalendarMath
 import com.ikeralvaro.calendario.data.Event
+import com.ikeralvaro.calendario.data.Occurrence
+import com.ikeralvaro.calendario.data.occurrencesOn
+import com.ikeralvaro.calendario.data.upcoming
+import kotlinx.coroutines.delay
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
@@ -42,33 +46,43 @@ fun MonthView(
     events: List<Event>,
     onSelect: (LocalDate) -> Unit,
     onOpenDay: (LocalDate) -> Unit,
-    onEdit: (Event) -> Unit,
+    onOpen: (Occurrence) -> Unit,
+    onDelete: (Event) -> Unit,
 ) {
+    val firstDay = LocalSettings.current.firstDay
     val month = YearMonth.from(selected)
-    val grid = remember(month) { CalendarMath.monthGrid(month) }
+    val grid = remember(month, firstDay) { CalendarMath.monthGrid(month, firstDay) }
+    val byDay = remember(events, grid) { grid.associateWith { events.occurrencesOn(it) } }
     val today = LocalDate.now()
-    val dayEvents = events.filter { it.occursOn(selected) }
+    val dayEvents = remember(events, selected) { events.occurrencesOn(selected) }
+    var now by remember { mutableStateOf(LocalDateTime.now()) }
+    LaunchedEffect(Unit) { while (true) { delay(30_000); now = LocalDateTime.now() } }
+    val next = remember(events, now.withSecond(0).withNano(0)) { events.upcoming(now) }
+
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 100.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        item {
+        if (next != null) item(key = "next") {
+            NextEventCard(next, now, Modifier.animateItem()) { onOpen(next) }
+        }
+        item(key = "grid") {
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .shadow(10.dp, RoundedCornerShape(24.dp), ambientColor = Color(0x22000000), spotColor = Color(0x22000000))
+                    .shadow(12.dp, RoundedCornerShape(24.dp), ambientColor = Color(0x1A000000), spotColor = Color(0x1A000000))
                     .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(24.dp))
                     .padding(horizontal = 8.dp, vertical = 12.dp)
             ) {
                 Row(Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
-                    DayOfWeek.entries.forEach {
+                    CalendarMath.weekHeader(firstDay).forEach {
                         val weekend = it == DayOfWeek.SATURDAY || it == DayOfWeek.SUNDAY
                         Text(
                             it.getDisplayName(TextStyle.SHORT, Es).take(2).uppercase(Es),
                             Modifier.weight(1f),
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (weekend) MaterialTheme.colorScheme.primary.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = if (weekend) MaterialTheme.colorScheme.primary.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center,
                         )
                     }
@@ -76,8 +90,7 @@ fun MonthView(
                 grid.chunked(7).forEach { week ->
                     Row(Modifier.fillMaxWidth()) {
                         week.forEach { day ->
-                            DayCell(day, month, day == selected, day == today,
-                                events.filter { it.occursOn(day) }, Modifier.weight(1f)) {
+                            DayCell(day, month, day == selected, day == today, byDay[day].orEmpty(), Modifier.weight(1f)) {
                                 if (day == selected) onOpenDay(day) else onSelect(day)
                             }
                         }
@@ -85,36 +98,79 @@ fun MonthView(
                 }
             }
         }
-        item {
+        item(key = "dayTitle") {
             Row(Modifier.padding(start = 4.dp, top = 10.dp), verticalAlignment = Alignment.Bottom) {
                 Text(
                     when (selected) {
-                        today -> "Hoy"
-                        today.plusDays(1) -> "Mañana"
-                        today.minusDays(1) -> "Ayer"
+                        today, today.plusDays(1), today.minusDays(1) -> relativeDay(selected, today)
                         else -> selected.format(DateTimeFormatter.ofPattern("EEEE d", Es)).cap()
                     },
                     style = MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.onBackground,
                 )
                 Spacer(Modifier.width(8.dp))
-                Text(
-                    if (dayEvents.isEmpty()) "" else "${dayEvents.size} evento${if (dayEvents.size > 1) "s" else ""}",
+                if (dayEvents.isNotEmpty()) Text(
+                    "${dayEvents.size} evento${if (dayEvents.size > 1) "s" else ""}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 3.dp),
                 )
             }
         }
-        if (dayEvents.isEmpty()) item { EmptyDay() }
-        items(dayEvents, key = { it.id }) { EventCard(it, onEdit) }
+        if (dayEvents.isEmpty()) item(key = "empty") {
+            EmptyState("Día libre", "Pulsa «Nuevo» para añadir un evento", Modifier.animateItem())
+        }
+        items(dayEvents, key = { "${it.event.id}-${it.start}" }) {
+            SwipeableEventCard(it, onOpen, onDelete, Modifier.animateItem())
+        }
+    }
+}
+
+@Composable
+private fun NextEventCard(o: Occurrence, now: LocalDateTime, modifier: Modifier, onClick: () -> Unit) {
+    val c = Color(o.event.color)
+    val dark = lerp(c, Color.Black, 0.25f)
+    Column(
+        modifier
+            .fillMaxWidth()
+            .shadow(14.dp, RoundedCornerShape(24.dp), ambientColor = c, spotColor = c)
+            .clip(RoundedCornerShape(24.dp))
+            .background(Brush.linearGradient(listOf(c, dark)))
+            .clickable(onClick = onClick)
+            .padding(18.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("PRÓXIMO", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.8f),
+                modifier = Modifier.weight(1f))
+            Box(
+                Modifier.clip(CircleShape).background(Color.White.copy(alpha = 0.22f)).padding(horizontal = 10.dp, vertical = 4.dp)
+            ) {
+                Text(countdown(now, o.start, o.end), style = MaterialTheme.typography.labelMedium, color = Color.White)
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(o.event.title.ifBlank { "(Sin título)" }, style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Spacer(Modifier.height(6.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.Schedule, null, Modifier.size(15.dp), tint = Color.White.copy(alpha = 0.85f))
+            Text("${relativeDay(o.start.toLocalDate())} · ${o.start.hm()} – ${o.end.hm()}",
+                style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.92f),
+                modifier = Modifier.padding(start = 5.dp))
+            if (o.event.location.isNotBlank()) {
+                Spacer(Modifier.width(12.dp))
+                Icon(Icons.Rounded.LocationOn, null, Modifier.size(15.dp), tint = Color.White.copy(alpha = 0.85f))
+                Text(o.event.location, style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.92f),
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 3.dp))
+            }
+        }
     }
 }
 
 @Composable
 private fun DayCell(
     day: LocalDate, month: YearMonth, isSel: Boolean, isToday: Boolean,
-    events: List<Event>, modifier: Modifier, onClick: () -> Unit,
+    occ: List<Occurrence>, modifier: Modifier, onClick: () -> Unit,
 ) {
     val inMonth = day.month == month.month
     val bg by animateColorAsState(
@@ -149,73 +205,9 @@ private fun DayCell(
             )
         }
         Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            events.take(3).forEach {
-                Box(Modifier.width(7.dp).height(3.dp).clip(CircleShape).background(Color(it.color).copy(alpha = if (inMonth) 1f else 0.4f)))
-            }
-        }
-    }
-}
-
-@Composable
-fun EmptyDay() {
-    Column(
-        Modifier.fillMaxWidth().padding(vertical = 28.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Box(
-            Modifier.size(64.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
-            contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Rounded.EventAvailable, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(30.dp)) }
-        Spacer(Modifier.height(12.dp))
-        Text("Día libre", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
-        Text("Pulsa «Nuevo» para añadir un evento", style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-@Composable
-fun EventCard(event: Event, onEdit: (Event) -> Unit) {
-    val fmt = DateTimeFormatter.ofPattern("HH:mm")
-    val c = Color(event.color)
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .clickable { onEdit(event) }
-            .height(IntrinsicSize.Min),
-    ) {
-        Box(Modifier.width(6.dp).fillMaxHeight().background(c))
-        Column(
-            Modifier.width(64.dp).fillMaxHeight().background(c.copy(alpha = 0.10f)).padding(vertical = 14.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            if (event.allDay) {
-                Text("TODO", style = MaterialTheme.typography.labelSmall, color = c)
-                Text("EL DÍA", style = MaterialTheme.typography.labelSmall, color = c)
-            } else {
-                Text(event.startDateTime().format(fmt), style = MaterialTheme.typography.labelLarge, color = c)
-                Text(event.endDateTime().format(fmt), style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-        Column(Modifier.weight(1f).padding(horizontal = 14.dp, vertical = 14.dp)) {
-            Text(event.title.ifBlank { "(Sin título)" }, style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (event.location.isNotBlank() || event.reminderMinutes >= 0) {
-                Spacer(Modifier.height(4.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (event.location.isNotBlank()) {
-                        Icon(Icons.Rounded.LocationOn, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(event.location, style = MaterialTheme.typography.bodyMedium, maxLines = 1,
-                            overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.weight(1f, fill = false).padding(start = 2.dp, end = 8.dp))
-                    }
-                    if (event.reminderMinutes >= 0) {
-                        Icon(Icons.Rounded.NotificationsActive, "Con aviso", Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
+            occ.distinctBy { it.event.id }.take(3).forEach {
+                Box(Modifier.width(7.dp).height(3.dp).clip(CircleShape)
+                    .background(Color(it.event.color).copy(alpha = if (inMonth) 1f else 0.4f)))
             }
         }
     }

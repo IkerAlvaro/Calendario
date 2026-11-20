@@ -32,6 +32,15 @@ private val Light = lightColorScheme(
     onSurfaceVariant = Color(0xFF7C7C84),
     outline = Color(0xFFE3E3E8),
     outlineVariant = Color(0xFFF0F0F3),
+    secondaryContainer = Color(0xFFEDEDF0),
+    onSecondaryContainer = Color(0xFF1C1C1E),
+    tertiary = Accent,
+    surfaceTint = Color.Transparent,
+    surfaceContainerLowest = Color.White,
+    surfaceContainerLow = Color(0xFFFAFAFB),
+    surfaceContainer = Color(0xFFF5F5F7),
+    surfaceContainerHigh = Color.White,
+    surfaceContainerHighest = Color(0xFFEDEDF0),
 )
 
 private val Dark = darkColorScheme(
@@ -49,6 +58,15 @@ private val Dark = darkColorScheme(
     onSurfaceVariant = Color(0xFF9A9AA3),
     outline = Color(0xFF2C2C31),
     outlineVariant = Color(0xFF222226),
+    secondaryContainer = Color(0xFF26262A),
+    onSecondaryContainer = Color(0xFFF2F2F7),
+    tertiary = Color(0xFFFF3B45),
+    surfaceTint = Color.Transparent,
+    surfaceContainerLowest = Color(0xFF0E0E10),
+    surfaceContainerLow = Color(0xFF151518),
+    surfaceContainer = Color(0xFF1A1A1D),
+    surfaceContainerHigh = Color(0xFF1F1F23),
+    surfaceContainerHighest = Color(0xFF26262A),
 )
 
 private val Type = Typography(
@@ -59,6 +77,7 @@ private val Type = Typography(
     bodyLarge = TextStyle(fontSize = 16.sp),
     bodyMedium = TextStyle(fontSize = 14.sp),
     labelLarge = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
+    labelMedium = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.3.sp),
     labelSmall = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.8.sp),
 )
 
@@ -69,9 +88,9 @@ private val AppShapes = Shapes(
 )
 
 @Composable
-fun CalendarioTheme(content: @Composable () -> Unit) {
+fun CalendarioTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = if (isSystemInDarkTheme()) Dark else Light,
+        colorScheme = if (darkTheme) Dark else Light,
         typography = Type,
         shapes = AppShapes,
         content = content,

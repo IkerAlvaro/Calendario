@@ -12,6 +12,9 @@ interface EventDao {
     @Query("SELECT * FROM events ORDER BY start ASC")
     fun observeAll(): Flow<List<Event>>
 
+    @Query("SELECT * FROM events ORDER BY start ASC")
+    suspend fun all(): List<Event>
+
     @Query("SELECT * FROM events WHERE id = :id")
     suspend fun byId(id: Long): Event?
 
