@@ -1,0 +1,33 @@
+diff --git a/proxyfox.html b/proxyfox.html
+index 4e09c0c..d8054a5 100644
+--- a/proxyfox.html
++++ b/proxyfox.html
+@@ -7395,11 +7395,23 @@ async function relayCandidates(optionUrl) {
+ }
+ async function pickRelay(cands) {
+   if (!navigator.onLine) return { url: cands[0] || "", state: "offline" };
+-  for (const u of cands) {
+-    const r = await probeWisp(u);
+-    if (r.ok) return { url: u, state: "ok" };
+-    console.warn(`[proxyfox.html] relay: ${u} didn't connect (${r.why})${u !== cands[cands.length - 1] ? ", trying the next one" : ""}`);
+-  }
++  if (!cands.length) return { url: "", state: "none" };
++  // Probe every relay at once and keep the first to answer: the fastest handshake is the
++  // lowest-latency relay, and a dead relay no longer costs 3 s before the next one is tried.
++  const pick = await new Promise((resolve) => {
++    let left = cands.length;
++    for (const u of cands) {
++      const t0 = performance.now();
++      probeWisp(u).then((r) => {
++        if (r.ok) {
++          console.log(`[proxyfox.html] relay: ${u} answered in ${Math.round(performance.now() - t0)} ms`);
++          resolve(u);
++        } else console.warn(`[proxyfox.html] relay: ${u} didn't connect (${r.why})`);
++        if (--left === 0) resolve(null);
++      });
++    }
++  });
++  if (pick) return { url: pick, state: "ok" };
+   return { url: cands[0] || "", state: navigator.onLine ? "none" : "offline" };
+ }
+ var RELAY_TEXT = {
